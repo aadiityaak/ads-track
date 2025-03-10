@@ -82,7 +82,6 @@ function velocity_ads_track_capture_utm()
 }
 
 // Fungsi untuk menyimpan data UTM ke database
-// Fungsi untuk mendapatkan session ID (atau cookie velocity_session_track)
 function velocity_ads_track_get_session_id()
 {
     // Periksa apakah cookie velocity_session_track sudah ada
@@ -212,6 +211,7 @@ function velocity_ads_track_save_whatsapp_click()
 
     // Ambil session ID
     $session_id = velocity_ads_track_get_session_id();
+    error_log("Session ID saat klik WhatsApp: $session_id");
 
     // Periksa apakah sudah ada data untuk sesi ini
     $existing_data = $wpdb->get_row($wpdb->prepare(
@@ -232,12 +232,14 @@ function velocity_ads_track_save_whatsapp_click()
             array('%d')  // Placeholder untuk ID
         );
 
-        // kirim json response
+        // Kirim JSON response
         $response = array(
             'success' => true,
-            'message' => 'Data UTM berhasil disimpan: session_id=' . $session_id,
+            'message' => 'Data UTM berhasil diperbarui: session_id=' . $session_id,
         );
     } else {
+        // Logging jika data tidak ditemukan
+        error_log("Data UTM untuk session_id=$session_id tidak ditemukan.");
         $response = array(
             'success' => false,
             'message' => 'Data UTM untuk session_id=' . $session_id . ' tidak ditemukan.',
@@ -245,21 +247,5 @@ function velocity_ads_track_save_whatsapp_click()
     }
 
     wp_send_json($response);
-
     wp_die(); // Wajib untuk mengakhiri permintaan AJAX
-}
-
-// Hook untuk memulai sesi atau membuat cookie velocity_session_track
-add_action('init', 'velocity_ads_track_start_session_or_cookie');
-
-function velocity_ads_track_start_session_or_cookie()
-{
-    // Periksa apakah cookie velocity_session_track sudah ada
-    if (!isset($_COOKIE['velocity_session_track'])) {
-        // Generate identifier unik
-        $unique_id = uniqid('velocity_', true);
-
-        // Set cookie velocity_session_track selama 30 hari
-        setcookie('velocity_session_track', $unique_id, time() + (86400 * 30), "/");
-    }
 }
