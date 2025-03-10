@@ -85,10 +85,19 @@ function velocity_ads_track_capture_utm()
 // Fungsi untuk mendapatkan session ID (atau cookie velocity_session_track)
 function velocity_ads_track_get_session_id()
 {
+    // Periksa apakah cookie velocity_session_track sudah ada
     if (isset($_COOKIE['velocity_session_track'])) {
         return sanitize_text_field($_COOKIE['velocity_session_track']);
     }
-    return '';
+
+    // Jika cookie tidak ada, generate nilai unik
+    $session_id = uniqid('velocity_', true);
+
+    // Set cookie velocity_session_track selama 30 hari
+    setcookie('velocity_session_track', $session_id, time() + (86400 * 30), "/");
+
+    // Kembalikan nilai session_id
+    return $session_id;
 }
 
 // Contoh penggunaan saat menyimpan data UTM ke database
@@ -96,9 +105,26 @@ function velocity_ads_track_save_to_database($utm_source, $utm_medium, $utm_camp
 {
     global $wpdb;
 
+    // Sanitasi input untuk keamanan
+    $utm_source = sanitize_text_field($utm_source);
+    $utm_medium = sanitize_text_field($utm_medium);
+    $utm_campaign = sanitize_text_field($utm_campaign);
+    $utm_content = sanitize_text_field($utm_content);
+    $utm_term = sanitize_text_field($utm_term);
+
+    // Skip jika $utm_term adalah placeholder dan jika kosong atau tidak ada term
+    if ($utm_term === '{keyword}') {
+        return;
+    }
+
+    // Ambil session ID dari cookie
+    $session_id = velocity_ads_track_get_session_id();
+
+    // Ambil user ID (NULL jika tidak ada pengguna yang login)
+    $user_id = get_current_user_id() ?: NULL;
+
+    // Nama tabel
     $table_name = $wpdb->prefix . 'velocity_ads_track';
-    $session_id = velocity_ads_track_get_session_id(); // Ambil session ID dari cookie
-    $user_id = get_current_user_id();
 
     // Periksa apakah data untuk sesi ini sudah ada
     $existing_data = $wpdb->get_row($wpdb->prepare(
@@ -120,6 +146,12 @@ function velocity_ads_track_save_to_database($utm_source, $utm_medium, $utm_camp
                 'utm_term' => $utm_term,
             )
         );
+
+        // Logging untuk debugging
+        error_log("Data UTM berhasil disimpan: session_id=$session_id, user_id=$user_id, utm_source=$utm_source, utm_medium=$utm_medium, utm_campaign=$utm_campaign, utm_content=$utm_content, utm_term=$utm_term");
+    } else {
+        // Logging jika data sudah ada
+        error_log("Data UTM untuk session_id=$session_id sudah ada, tidak disimpan ulang.");
     }
 }
 
