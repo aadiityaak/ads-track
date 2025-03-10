@@ -32,7 +32,7 @@ function velocity_ads_track_activate()
             utm_campaign varchar(255) DEFAULT NULL,
             utm_content varchar(255) DEFAULT NULL,
             utm_term varchar(255) DEFAULT NULL,
-            clicked_whatsapp tinyint(1) DEFAULT 0,
+            clicked_whatsapp varchar(255) DEFAULT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
             PRIMARY KEY (id)
         ) $charset_collate;";
@@ -43,7 +43,7 @@ function velocity_ads_track_activate()
         // Tambahkan kolom clicked_whatsapp jika belum ada
         $column_exists = $wpdb->get_var("SHOW COLUMNS FROM $table_name LIKE 'clicked_whatsapp'");
         if (!$column_exists) {
-            $wpdb->query("ALTER TABLE $table_name ADD clicked_whatsapp TINYINT(1) DEFAULT 0");
+            $wpdb->query("ALTER TABLE $table_name ADD clicked_whatsapp varchar(255) DEFAULT NULL");
         }
     }
 }
@@ -87,7 +87,9 @@ function velocity_ads_track_get_session_id()
 {
     // Periksa apakah cookie velocity_session_track sudah ada
     if (isset($_COOKIE['velocity_session_track'])) {
-        return sanitize_text_field($_COOKIE['velocity_session_track']);
+        $session_id = sanitize_text_field($_COOKIE['velocity_session_track']);
+        error_log("Session ID dari cookie: $session_id");
+        return $session_id;
     }
 
     // Jika cookie tidak ada, generate nilai unik
@@ -95,6 +97,7 @@ function velocity_ads_track_get_session_id()
 
     // Set cookie velocity_session_track selama 30 hari
     setcookie('velocity_session_track', $session_id, time() + (86400 * 30), "/");
+    error_log("Session ID baru di-generate: $session_id");
 
     // Kembalikan nilai session_id
     return $session_id;
@@ -177,16 +180,6 @@ function velocity_ads_track_admin_page()
     include_once(plugin_dir_path(__FILE__) . 'admin-page.php');
 }
 
-// Mulai sesi PHP jika belum dimulai
-add_action('init', 'velocity_ads_track_start_session');
-
-function velocity_ads_track_start_session()
-{
-    if (!session_id()) {
-        session_start();
-    }
-}
-
 // Enqueue script untuk deteksi klik WhatsApp
 add_action('wp_enqueue_scripts', 'velocity_ads_track_enqueue_scripts');
 
@@ -227,13 +220,31 @@ function velocity_ads_track_save_whatsapp_click()
     ));
 
     if ($existing_data) {
-        // Update kolom clicked_whatsapp menjadi 1
+        // Simpan timestamp saat ini dalam format string
+        $timestamp = current_time('mysql'); // Format: Y-m-d H:i:s
+
+        // Update kolom clicked_whatsapp
         $wpdb->update(
             $table_name,
-            array('clicked_whatsapp' => 1),
-            array('id' => $existing_data->id)
+            array('clicked_whatsapp' => $timestamp),
+            array('id' => $existing_data->id),
+            array('%s'), // Placeholder untuk VARCHAR
+            array('%d')  // Placeholder untuk ID
+        );
+
+        // kirim json response
+        $response = array(
+            'success' => true,
+            'message' => 'Data UTM berhasil disimpan: session_id=' . $session_id,
+        );
+    } else {
+        $response = array(
+            'success' => false,
+            'message' => 'Data UTM untuk session_id=' . $session_id . ' tidak ditemukan.',
         );
     }
+
+    wp_send_json($response);
 
     wp_die(); // Wajib untuk mengakhiri permintaan AJAX
 }
